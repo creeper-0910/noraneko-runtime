@@ -217,10 +217,6 @@
 #  include "mozilla/Logging.h"
 #endif
 
-#ifdef MOZ_JPROF
-#  include "jprof.h"
-#endif
-
 #include "nsExceptionHandler.h"
 #include "nsICrashReporter.h"
 #include "nsIPrefService.h"
@@ -233,6 +229,7 @@
 #include "GTestRunner.h"
 
 #ifdef MOZ_WIDGET_ANDROID
+#  include "gfxAndroidPlatform.h"
 #  include "mozilla/java/GeckoAppShellWrappers.h"
 #endif
 
@@ -355,11 +352,6 @@ std::unique_ptr<WaylandProxy> gWaylandProxy;
 #endif
 
 #include "BinaryPath.h"
-
-#ifdef MOZ_LOGGING
-#  include "mozilla/Logging.h"
-extern mozilla::LazyLogModule gWidgetWaylandLog;
-#endif /* MOZ_LOGGING */
 
 #ifdef FUZZING
 #  include "FuzzerRunner.h"
@@ -2507,11 +2499,6 @@ void UnlockProfile() {
 nsresult LaunchChild(bool aBlankCommandLine, bool aTryExec) {
   // Restart this process by exec'ing it into the current process
   // if supported by the platform.  Otherwise, use NSPR.
-
-#ifdef MOZ_JPROF
-  // make sure JPROF doesn't think we're E10s
-  unsetenv("JPROF_ISCHILD");
-#endif
 
   if (aBlankCommandLine) {
     gRestartArgc = 1;
@@ -4762,11 +4749,8 @@ int XREMain::XRE_mainStartup(bool* aExitFlag) {
       auto* proxyEnv = getenv("MOZ_DISABLE_WAYLAND_PROXY");
       bool disableWaylandProxy = proxyEnv && *proxyEnv;
       if (!disableWaylandProxy && XRE_IsParentProcess() && waylandEnabled) {
-#    ifdef MOZ_LOGGING
-        if (MOZ_LOG_TEST(gWidgetWaylandLog, mozilla::LogLevel::Debug)) {
-          WaylandProxy::SetVerbose(true);
-        }
-#    endif
+        auto* proxyLog = getenv("WAYLAND_PROXY_LOG");
+        WaylandProxy::SetVerbose(proxyLog && *proxyLog);
         gWaylandProxy = WaylandProxy::Create();
         if (gWaylandProxy) {
           gWaylandProxy->RunThread();
@@ -4869,11 +4853,6 @@ int XREMain::XRE_mainStartup(bool* aExitFlag) {
 #ifdef MOZ_X11
   // Do this after initializing GDK, or GDK will install its own handler.
   XRE_InstallX11ErrorHandler();
-#endif
-
-  // Call the code to install our handler
-#ifdef MOZ_JPROF
-  setupProfilingStuff();
 #endif
 
   bool canRun = false;
@@ -5865,6 +5844,12 @@ int XREMain::XRE_main(int argc, char* argv[], const BootstrapConfig& aConfig) {
   // to register the fonts, and we'd like it to have a chance to complete
   // before gfxPlatform initialization actually requires it.
   gfxPlatformMac::RegisterSupplementalFonts();
+#endif
+
+#ifdef MOZ_WIDGET_ANDROID
+  // We call the early because we run system font API on a background-thread
+  // to initialize internal font API data in Android. (Bug 1895926)
+  gfxAndroidPlatform::InitializeFontAPI();
 #endif
 
 #ifdef MOZ_CODE_COVERAGE

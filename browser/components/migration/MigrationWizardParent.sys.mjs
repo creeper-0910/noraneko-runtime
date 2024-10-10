@@ -43,11 +43,6 @@ let gHasOpenedBefore = false;
  * the associated MigrationWizardChild.
  */
 export class MigrationWizardParent extends JSWindowActorParent {
-  constructor() {
-    super();
-    Services.telemetry.setEventRecordingEnabled("browser.migration", true);
-  }
-
   didDestroy() {
     Services.obs.notifyObservers(this, "MigrationWizard:Destroyed");
     MigrationUtils.finishMigration();
@@ -695,11 +690,7 @@ export class MigrationWizardParent extends JSWindowActorParent {
           profileMigrationData & MigrationUtils.resourceTypes[resourceType] ||
           (migrator.constructor.key == lazy.SafariProfileMigrator?.key &&
             MigrationUtils.resourceTypes[resourceType] ==
-              MigrationUtils.resourceTypes.PASSWORDS &&
-            Services.prefs.getBoolPref(
-              "signon.management.page.fileImport.enabled",
-              false
-            ))
+              MigrationUtils.resourceTypes.PASSWORDS)
         ) {
           availableResourceTypes.push(resourceType);
         }

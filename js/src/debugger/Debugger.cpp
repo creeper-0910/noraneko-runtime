@@ -300,7 +300,7 @@ static void PropagateForcedReturn(JSContext* cx, AbstractFramePtr frame,
       return false;
 
     case ResumeMode::Terminate:
-      cx->clearPendingException();
+      cx->reportUncatchableException();
       return false;
 
     case ResumeMode::Return:
@@ -1049,7 +1049,7 @@ NativeResumeMode DebugAPI::slowPathOnNativeCall(JSContext* cx,
       return NativeResumeMode::Abort;
 
     case ResumeMode::Terminate:
-      cx->clearPendingException();
+      cx->reportUncatchableException();
       return NativeResumeMode::Abort;
 
     case ResumeMode::Return:
@@ -2544,6 +2544,36 @@ void DebugAPI::onNewScript(JSContext* cx, HandleScript script) {
       });
 }
 
+/* static */
+void DebugAPI::onSuspendWasmFrame(JSContext* cx, wasm::DebugFrame* debugFrame) {
+  AbstractFramePtr frame = AbstractFramePtr(debugFrame);
+  JS::AutoAssertNoGC nogc;
+  for (Realm::DebuggerVectorEntry& entry : frame.global()->getDebuggers(nogc)) {
+    Debugger* dbg = entry.dbg;
+    if (Debugger::FrameMap::Ptr p = dbg->frames.lookup(frame)) {
+      DebuggerFrame* frameObj = p->value();
+      frameObj->suspendWasmFrame(cx->gcContext());
+    }
+  }
+}
+
+/* static */
+void DebugAPI::onResumeWasmFrame(JSContext* cx, const FrameIter& iter) {
+  AbstractFramePtr frame = iter.abstractFramePtr();
+  MOZ_RELEASE_ASSERT(frame.isWasmDebugFrame());
+  JS::AutoAssertNoGC nogc;
+  for (Realm::DebuggerVectorEntry& entry : frame.global()->getDebuggers(nogc)) {
+    Debugger* dbg = entry.dbg;
+    if (Debugger::FrameMap::Ptr p = dbg->frames.lookup(frame)) {
+      DebuggerFrame* frameObj = p->value();
+      AutoEnterOOMUnsafeRegion oomUnsafe;
+      if (!frameObj->resume(iter)) {
+        oomUnsafe.crash("DebugAPI::onResumeWasmFrame");
+      }
+    }
+  }
+}
+
 void DebugAPI::slowPathOnNewWasmInstance(
     JSContext* cx, Handle<WasmInstanceObject*> wasmInstance) {
   Debugger::dispatchQuietHook(
@@ -3899,7 +3929,7 @@ void DebugAPI::traceFramesWithLiveHooks(JSTracer* tracer) {
     for (Debugger::FrameMap::Range r = dbg->frames.all(); !r.empty();
          r.popFront()) {
       HeapPtr<DebuggerFrame*>& frameobj = r.front().value();
-      MOZ_ASSERT(frameobj->isOnStack());
+      MOZ_ASSERT(frameobj->isOnStackOrSuspendedWasmStack());
       if (frameobj->hasAnyHooks()) {
         TraceEdge(tracer, &frameobj, "Debugger.Frame with live hooks");
       }
@@ -4026,7 +4056,7 @@ void Debugger::trace(JSTracer* trc) {
   for (FrameMap::Range r = frames.all(); !r.empty(); r.popFront()) {
     HeapPtr<DebuggerFrame*>& frameobj = r.front().value();
     TraceEdge(trc, &frameobj, "live Debugger.Frame");
-    MOZ_ASSERT(frameobj->isOnStack());
+    MOZ_ASSERT(frameobj->isOnStackOrSuspendedWasmStack());
   }
 
   allocationsLog.trace(trc);

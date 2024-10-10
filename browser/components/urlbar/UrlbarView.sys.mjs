@@ -615,11 +615,9 @@ export class UrlbarView {
     }
 
     let queryOptions = { event };
-
     if (
       !this.input.value ||
-      (this.input.getAttribute("pageproxystate") == "valid" &&
-        !this.window.gBrowser.selectedBrowser.searchTerms)
+      this.input.getAttribute("pageproxystate") == "valid"
     ) {
       if (!this.isOpen && ["mousedown", "command"].includes(event.type)) {
         // Try to reuse the cached top-sites context. If it's not cached, then
@@ -1895,9 +1893,7 @@ export class UrlbarView {
     switch (result.type) {
       case lazy.UrlbarUtils.RESULT_TYPE.TAB_SWITCH:
         // Hide chichlet when showing secondaryActions.
-        if (
-          !lazy.UrlbarPrefs.getScotchBonnetPref("secondaryActions.featureGate")
-        ) {
+        if (!lazy.UrlbarPrefs.get("secondaryActions.switchToTab")) {
           actionSetter = () => {
             this.#setSwitchTabActionChiclet(result, action);
           };
@@ -2742,20 +2738,38 @@ export class UrlbarView {
 
     if (result.payload.providesSearchMode) {
       if (result.type == lazy.UrlbarUtils.RESULT_TYPE.RESTRICT) {
+        let keywords = result.payload.l10nRestrictKeyword;
+        this.#setElementL10n(titleNode, {
+          id: "urlbar-result-search-with-local-search-mode",
+          args: {
+            keywords: `@${keywords.toLowerCase()}`,
+            localSearchMode: keywords,
+          },
+        });
+      } else if (
+        result.providerName == "TokenAliasEngines" &&
+        lazy.UrlbarPrefs.getScotchBonnetPref(
+          "searchRestrictKeywords.featureGate"
+        )
+      ) {
+        this.#setElementL10n(titleNode, {
+          id: "urlbar-result-search-with-engine-keywords",
+          args: {
+            keywords: result.payload.keywords,
+            engine: result.payload.engine,
+          },
+        });
+      } else {
+        // Keyword offers are the only result that require a localized title.
+        // We localize the title instead of using the action text as a title
+        // because some keyword offer results use both a title and action text
+        // (e.g., tab-to-search).
         this.#setElementL10n(titleNode, {
           id: "urlbar-result-action-search-w-engine",
-          args: { engine: result.payload.l10nRestrictKeyword },
+          args: { engine: result.payload.engine },
         });
-        return;
       }
-      // Keyword offers are the only result that require a localized title.
-      // We localize the title instead of using the action text as a title
-      // because some keyword offer results use both a title and action text
-      // (e.g. tab-to-search).
-      this.#setElementL10n(titleNode, {
-        id: "urlbar-result-action-search-w-engine",
-        args: { engine: result.payload.engine },
-      });
+
       return;
     }
 

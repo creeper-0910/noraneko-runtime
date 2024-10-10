@@ -809,13 +809,15 @@ class DiscoveryStreamAdminUI extends (external_React_default()).PureComponent {
     const {
       spocs
     } = this.props.state.DiscoveryStream;
+    const unifiedAdsSpocsEnabled = this.props.otherPrefs["unifiedAds.spocs.enabled"];
+    const unifiedAdsEndpoint = this.props.otherPrefs["unifiedAds.endpoint"];
     let spocsData = [];
-    if (spocs.data && spocs.data.spocs && spocs.data.spocs.items) {
-      spocsData = spocs.data.spocs.items || [];
+    if (spocs.data && spocs.data.newtab_spocs && spocs.data.newtab_spocs.items) {
+      spocsData = spocs.data.newtab_spocs.items || [];
     }
     return /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
       className: "min"
-    }, "spocs_endpoint"), /*#__PURE__*/external_React_default().createElement("td", null, spocs.spocs_endpoint)), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
+    }, "spocs_endpoint"), /*#__PURE__*/external_React_default().createElement("td", null, unifiedAdsSpocsEnabled ? unifiedAdsEndpoint : spocs.spocs_endpoint)), /*#__PURE__*/external_React_default().createElement(Row, null, /*#__PURE__*/external_React_default().createElement("td", {
       className: "min"
     }, "Data last fetched"), /*#__PURE__*/external_React_default().createElement("td", null, relativeTime(spocs.lastUpdated))))), /*#__PURE__*/external_React_default().createElement("h4", null, "Spoc data"), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, spocsData.map(spoc => this.renderStoryData(spoc)))), /*#__PURE__*/external_React_default().createElement("h4", null, "Spoc frequency caps"), /*#__PURE__*/external_React_default().createElement("table", null, /*#__PURE__*/external_React_default().createElement("tbody", null, spocs.frequency_caps.map(spoc => this.renderStoryData(spoc)))));
   }
@@ -3286,10 +3288,14 @@ class _DSCard extends (external_React_default()).PureComponent {
         className: "card-stp-button",
         onClick: this.onSaveClick
       }, this.props.context_type === "pocket" ? /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("span", {
+        "data-l10n-id": "newtab-pocket-image",
+        role: "img",
         className: "story-badge-icon icon icon-pocket"
       }), /*#__PURE__*/external_React_default().createElement("span", {
         "data-l10n-id": "newtab-pocket-saved"
       })) : /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("span", {
+        "data-l10n-id": "newtab-pocket-image",
+        role: "img",
         className: "story-badge-icon icon icon-pocket-save"
       }), /*#__PURE__*/external_React_default().createElement("span", {
         "data-l10n-id": "newtab-pocket-save"
@@ -10150,7 +10156,9 @@ const NEWTAB_DARK_THEME = {
 
 function Logo() {
   return /*#__PURE__*/external_React_default().createElement("div", {
-    className: "logo-and-wordmark"
+    className: "logo-and-wordmark",
+    role: "img",
+    "data-l10n-id": "newtab-logo-and-wordmark"
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "logo"
   }), /*#__PURE__*/external_React_default().createElement("div", {

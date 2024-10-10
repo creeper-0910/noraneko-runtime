@@ -383,11 +383,6 @@ abstract class BaseBrowserFragment :
         _binding = FragmentBrowserBinding.inflate(inflater, container, false)
 
         val activity = activity as HomeActivity
-        // ExternalAppBrowserActivity exclusively handles it's own theming unless in private mode.
-        if (activity !is ExternalAppBrowserActivity || activity.browsingModeManager.mode.isPrivate) {
-            activity.themeManager.applyStatusBarTheme(activity)
-        }
-
         val originalContext = ActivityContextWrapper.getOriginalContext(activity)
         binding.engineView.setActivityContext(originalContext)
 
@@ -2149,7 +2144,17 @@ abstract class BaseBrowserFragment :
         if (findInPageIntegration.get()?.isFeatureActive == true) return
         val toolbarHeights = view?.let { probeToolbarHeights(it) } ?: return
 
-        getEngineView().setDynamicToolbarMaxHeight(toolbarHeights.first + toolbarHeights.second)
+        context?.also {
+            if (isToolbarDynamic(it)) {
+                if (!requireComponents.core.geckoRuntime.isInteractiveWidgetDefaultResizesVisual) {
+                    getEngineView().setDynamicToolbarMaxHeight(toolbarHeights.first + toolbarHeights.second)
+                }
+            } else {
+                (getSwipeRefreshLayout().layoutParams as? CoordinatorLayout.LayoutParams)?.apply {
+                    bottomMargin = toolbarHeights.second
+                }
+            }
+        }
     }
 
     /**
@@ -2157,9 +2162,8 @@ abstract class BaseBrowserFragment :
      */
     private fun probeToolbarHeights(rootView: View): Pair<Int, Int> {
         val context = rootView.context
-        // Avoid any change for scenarios where the toolbar is not shown / not dynamic
+        // Avoid any change for scenarios where the toolbar is not shown
         if (fullScreenFeature.get()?.isFullScreen == true) return 0 to 0
-        if (!isToolbarDynamic(context)) return 0 to 0
 
         val topToolbarHeight = context.settings().getTopToolbarHeight(
             includeTabStrip = customTabSessionId == null && context.isTabStripEnabled(),
@@ -2360,6 +2364,7 @@ abstract class BaseBrowserFragment :
                 isVisible = false
             }
             val browserEngine = binding.swipeRefresh.layoutParams as CoordinatorLayout.LayoutParams
+            browserEngine.behavior = null
             browserEngine.bottomMargin = 0
             browserEngine.topMargin = 0
             binding.swipeRefresh.translationY = 0f
@@ -2378,7 +2383,7 @@ abstract class BaseBrowserFragment :
             (activity as? HomeActivity)?.let { homeActivity ->
                 // ExternalAppBrowserActivity exclusively handles it's own theming unless in private mode.
                 if (homeActivity !is ExternalAppBrowserActivity || homeActivity.browsingModeManager.mode.isPrivate) {
-                    homeActivity.themeManager.applyStatusBarTheme(homeActivity)
+                    homeActivity.themeManager.applyStatusBarTheme(homeActivity, homeActivity.isTabStripEnabled())
                 }
             }
             if (webAppToolbarShouldBeVisible) {
@@ -2510,7 +2515,7 @@ abstract class BaseBrowserFragment :
 
         val onboardingLinksList: List<String> = listOf(
             SupportUtils.getMozillaPageUrl(SupportUtils.MozillaPage.PRIVATE_NOTICE),
-            SupportUtils.getFirefoxAccountSumoUrl(),
+            SupportUtils.FXACCOUNT_SUMO_URL,
         )
     }
 
@@ -2523,7 +2528,9 @@ abstract class BaseBrowserFragment :
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
 
-        if (findInPageIntegration.get()?.isFeatureActive != true) {
+        if (findInPageIntegration.get()?.isFeatureActive != true &&
+            fullScreenFeature.get()?.isFullScreen != true
+        ) {
             _browserToolbarView?.let {
                 onUpdateToolbarForConfigurationChange(it)
             }

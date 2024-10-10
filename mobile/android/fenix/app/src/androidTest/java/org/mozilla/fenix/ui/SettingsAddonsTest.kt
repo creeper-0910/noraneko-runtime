@@ -136,8 +136,7 @@ class SettingsAddonsTest : TestSetup() {
         val addonName = "uBlock Origin"
 
         addonsMenu {
-            installAddon(addonName, activityTestRule)
-            selectAllowInPrivateBrowsing()
+            installAddonInPrivateMode(addonName, activityTestRule)
             closeAddonInstallCompletePrompt()
         }.goBack {
         }.openContextMenuOnSponsoredShortcut("Top Articles") {

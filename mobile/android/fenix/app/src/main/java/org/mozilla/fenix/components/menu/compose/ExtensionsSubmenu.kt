@@ -40,14 +40,13 @@ import org.mozilla.fenix.compose.list.TextListItem
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.theme.Theme
 
-internal const val EXTENSIONS_MENU_ROUTE = "extensions_menu"
-
 @Suppress("LongParameterList")
 @Composable
 internal fun ExtensionsSubmenu(
     recommendedAddons: List<Addon>,
-    webExtensionMenuItems: List<WebExtensionMenuItem>,
+    webExtensionMenuItems: List<WebExtensionMenuItem.WebExtensionBrowserMenuItem>,
     showExtensionsOnboarding: Boolean,
+    showManageExtensions: Boolean,
     addonInstallationInProgress: Addon?,
     onBackButtonClick: () -> Unit,
     onExtensionsLearnMoreClick: () -> Unit,
@@ -83,13 +82,15 @@ internal fun ExtensionsSubmenu(
         if (webExtensionMenuItems.isNotEmpty()) {
             MenuGroup {
                 for (webExtensionMenuItem in webExtensionMenuItems) {
+                    if (webExtensionMenuItem != webExtensionMenuItems[0]) {
+                        Divider(color = FirefoxTheme.colors.borderSecondary)
+                    }
+
                     WebExtensionMenuItem(
                         label = webExtensionMenuItem.label,
-                        iconPainter = if (webExtensionMenuItem.icon != null) {
-                            BitmapPainter(image = webExtensionMenuItem.icon.asImageBitmap())
-                        } else {
-                            painterResource(R.drawable.mozac_ic_web_extension_default_icon)
-                        },
+                        iconPainter = webExtensionMenuItem.icon?.let { icon ->
+                            BitmapPainter(image = icon.asImageBitmap())
+                        } ?: painterResource(R.drawable.mozac_ic_web_extension_default_icon),
                         enabled = webExtensionMenuItem.enabled,
                         badgeText = webExtensionMenuItem.badgeText,
                         badgeTextColor = webExtensionMenuItem.badgeTextColor,
@@ -100,12 +101,14 @@ internal fun ExtensionsSubmenu(
             }
         }
 
-        MenuGroup {
-            MenuItem(
-                label = stringResource(id = R.string.browser_menu_manage_extensions),
-                beforeIconPainter = painterResource(id = R.drawable.mozac_ic_extension_cog_24),
-                onClick = onManageExtensionsMenuClick,
-            )
+        if (showManageExtensions) {
+            MenuGroup {
+                MenuItem(
+                    label = stringResource(id = R.string.browser_menu_manage_extensions),
+                    beforeIconPainter = painterResource(id = R.drawable.mozac_ic_extension_cog_24),
+                    onClick = onManageExtensionsMenuClick,
+                )
+            }
         }
 
         RecommendedAddons(
@@ -198,6 +201,7 @@ private fun ExtensionsSubmenuPreview() {
                     ),
                 ),
                 showExtensionsOnboarding = true,
+                showManageExtensions = true,
                 addonInstallationInProgress = Addon(
                     id = "id",
                     translatableName = mapOf(Addon.DEFAULT_LOCALE to "name"),
@@ -205,7 +209,7 @@ private fun ExtensionsSubmenuPreview() {
                     translatableSummary = mapOf(Addon.DEFAULT_LOCALE to "summary"),
                 ),
                 webExtensionMenuItems = listOf(
-                    WebExtensionMenuItem(
+                    WebExtensionMenuItem.WebExtensionBrowserMenuItem(
                         label = "label",
                         enabled = true,
                         icon = BitmapFactory.decodeResource(
@@ -253,7 +257,7 @@ private fun ExtensionsSubmenuPrivatePreview() {
                     ),
                 ),
                 webExtensionMenuItems = listOf(
-                    WebExtensionMenuItem(
+                    WebExtensionMenuItem.WebExtensionBrowserMenuItem(
                         label = "label",
                         enabled = true,
                         icon = BitmapFactory.decodeResource(
@@ -268,6 +272,7 @@ private fun ExtensionsSubmenuPrivatePreview() {
                     ),
                 ),
                 showExtensionsOnboarding = true,
+                showManageExtensions = false,
                 addonInstallationInProgress = null,
                 onBackButtonClick = {},
                 onExtensionsLearnMoreClick = {},

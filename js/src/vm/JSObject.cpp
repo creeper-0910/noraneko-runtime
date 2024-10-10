@@ -2301,6 +2301,14 @@ JS_PUBLIC_API bool js::ShouldIgnorePropertyDefinition(JSContext* cx,
       id == NameToId(cx->names().try_)) {
     return true;
   }
+
+  // It's gently surprising that this is JSProto_Function, but the trick
+  // to realize is that this is a -constructor function-, not a function
+  // on the prototype; and the proto of the constructor is JSProto_Function.
+  if (key == JSProto_Function && !JS::Prefs::experimental_joint_iteration() &&
+      id == NameToId(cx->names().zip)) {
+    return true;
+  }
 #endif
 
   if (key == JSProto_JSON &&

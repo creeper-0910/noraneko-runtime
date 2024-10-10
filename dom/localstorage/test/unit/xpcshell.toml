@@ -9,6 +9,8 @@ support-files = [
   "migration_profile.zip",
   "schema3upgrade_profile.zip",
   "schema4upgrade_profile.zip",
+  "slowDatabaseInitialization_child.js",
+  "slowRequestFinalization_child.js",
   "somedata_profile.zip",
   "stringLength2_profile.zip",
   "stringLength_profile.zip",
@@ -55,6 +57,8 @@ run-sequentially = "test_databaseShadowing_clearOriginsByPrefix2.js depends on a
 ["test_databaseShadowing_clearOriginsByPrefix2.js"]
 run-sequentially = "this test depends on a file produced by test_databaseShadowing_clearOriginsByPrefix1.js"
 
+["test_databaseWorkStarted.js"]
+
 ["test_eviction.js"]
 
 ["test_flushing.js"]
@@ -80,9 +84,17 @@ support-files = ["migration_emptyValue_profile.zip",]
 
 ["test_preloading.js"]
 
+["test_requestFinalizationStarted.js"]
+
 ["test_schema3upgrade.js"]
 
 ["test_schema4upgrade.js"]
+
+["test_shutdownDuringRequestFinalization.js"]
+
+["test_slowDatabaseInitialization.js"]
+
+["test_slowRequestFinalization.js"]
 
 ["test_slowStorageInitialization.js"]
 

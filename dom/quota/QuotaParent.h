@@ -86,8 +86,13 @@ class Quota final : public PQuotaParent {
 
   virtual mozilla::ipc::IPCResult RecvClearStoragesForOrigin(
       const Maybe<PersistenceType>& aPersistenceType,
-      const PrincipalInfo& aPrincipalInfo, const Maybe<Type>& aClientType,
+      const PrincipalInfo& aPrincipalInfo,
       ClearStoragesForOriginResolver&& aResolve) override;
+
+  virtual mozilla::ipc::IPCResult RecvClearStoragesForClient(
+      const Maybe<PersistenceType>& aPersistenceType,
+      const PrincipalInfo& aPrincipalInfo, const Type& aClientType,
+      ClearStoragesForClientResolver&& aResolve) override;
 
   virtual mozilla::ipc::IPCResult RecvClearStoragesForOriginPrefix(
       const Maybe<PersistenceType>& aPersistenceType,
@@ -103,6 +108,16 @@ class Quota final : public PQuotaParent {
 
   virtual mozilla::ipc::IPCResult RecvClearStorage(
       ClearStorageResolver&& aResolver) override;
+
+  virtual mozilla::ipc::IPCResult RecvShutdownStoragesForOrigin(
+      const Maybe<PersistenceType>& aPersistenceType,
+      const PrincipalInfo& aPrincipalInfo,
+      ShutdownStoragesForOriginResolver&& aResolve) override;
+
+  virtual mozilla::ipc::IPCResult RecvShutdownStoragesForClient(
+      const Maybe<PersistenceType>& aPersistenceType,
+      const PrincipalInfo& aPrincipalInfo, const Type& aClientType,
+      ShutdownStoragesForClientResolver&& aResolve) override;
 
   virtual mozilla::ipc::IPCResult RecvShutdownStorage(
       ShutdownStorageResolver&& aResolver) override;

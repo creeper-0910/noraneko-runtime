@@ -2284,7 +2284,7 @@
 # limit.
 - name: dom.popup_maximum
   type: int32_t
-  value: 20
+  value: -1
   mirror: always
 
 # Enable experimental popup blocker changes.
@@ -2304,6 +2304,12 @@
 - name: dom.caches.testing.enabled
   type: RelaxedAtomicBool
   value: false
+  mirror: always
+
+# A pref that is used to slow down database initialization for testing purposes.
+- name: dom.cache.databaseInitialization.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
   mirror: always
 
 # Disable capture attribute for input elements; only supported on GeckoView.
@@ -2428,7 +2434,7 @@
 # Enable/disable contenteditable="plaintext-only".
 - name: dom.element.contenteditable.plaintext-only.enabled
   type: bool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 - name: dom.element.transform-getters.enabled
@@ -2701,7 +2707,7 @@
 
 - name: dom.fetchKeepalive.enabled
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 # The maximum number of pending fetch keepalive requests per browser instance
@@ -2881,6 +2887,12 @@
   value: false
   mirror: always
 
+# A pref that is used to slow down database initialization for testing purposes.
+- name: dom.indexedDB.databaseInitialization.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
+  mirror: always
+
 # How innerWidth / innerHeight return rounded or fractional sizes.
 #
 #   0 or others: Do not round at all.
@@ -2941,7 +2953,7 @@
   mirror: always
 
 - name: dom.interactive_widget_default_resizes_visual
-  type: bool
+  type: RelaxedAtomicBool
   value: true
   mirror: always
 
@@ -3606,6 +3618,12 @@
   value: false
   mirror: always
 
+# A pref that is used to slow down database initialization for testing purposes.
+- name: dom.simpledb.databaseInitialization.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
+  mirror: always
+
 # Determines within what distance of a tick mark, in pixels, dragging an input
 # range range will snap the range's value to that tick mark. By default, this is
 # half the default width of the range thumb.
@@ -4158,6 +4176,13 @@
   value: @IS_NOT_ANDROID@
   mirror: always
 
+# Server-Sent Events
+# Equal to the DEFAULT_RECONNECTION_TIME_VALUE value in nsEventSource.cpp
+- name: dom.serverEvents.defaultReconnectionTime
+  type: RelaxedAtomicUint32
+  value: 5000 # in milliseconds
+  mirror: always
+
 # Whether automatic storage access granting heuristics should be turned on.
 - name: dom.storage_access.auto_grants
   type: bool
@@ -4217,6 +4242,18 @@
 - name: dom.fs.writable_file_stream.enabled
   type: RelaxedAtomicBool
   value: true
+  mirror: always
+
+# A pref that is used to enable testing features.
+- name: dom.fs.testing
+  type: SequentiallyConsistentAtomicBool
+  value: false
+  mirror: always
+
+# A pref that is used to slow down database initialization for testing purposes.
+- name: dom.fs.databaseInitialization.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
   mirror: always
 
 # LocalStorage data limit as determined by summing up the lengths of all string
@@ -4291,8 +4328,20 @@
 
 # Is support for Storage test APIs enabled?
 - name: dom.storage.testing
-  type: bool
+  type: SequentiallyConsistentAtomicBool
   value: false
+  mirror: always
+
+# A pref that is used to slow down database initialization for testing purposes.
+- name: dom.storage.databaseInitialization.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
+  mirror: always
+
+# A pref that is used to slow down request finalization for testing purposes.
+- name: dom.storage.requestFinalization.pauseOnDOMFileThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
   mirror: always
 
 # For area and anchor elements with target=_blank and no rel set to
@@ -5047,13 +5096,6 @@
   type: String
   value: "#FFFFFF"
   mirror: never
-
-# Whether HTMLEditor consides block or inline element with computed style or
-# only with the default style of HTML definition.
-- name: editor.block_inline_check.use_computed_style
-  type: bool
-  value: true
-  mirror: always
 
 # Delay to mask last input character in password fields.
 # If negative value, to use platform's default behavior.
@@ -8071,6 +8113,27 @@
     mirror: always
     set_spidermonkey_pref: startup
 
+  # Experimental support for Math.sumPrecise in JavaScript.
+-   name: javascript.options.experimental.math_sumprecise
+    type: bool
+    value: false
+    mirror: always
+    set_spidermonkey_pref: startup
+
+  # Experimental support for Iterator.range in JavaScript.
+-   name: javascript.options.experimental.iterator_range
+    type: bool
+    value: false
+    mirror: always
+    set_spidermonkey_pref: startup
+
+  # Experimental support for Joint Iteration in JavaScript.
+-   name: javascript.options.experimental.joint_iteration
+    type: bool
+    value: false
+    mirror: always
+    set_spidermonkey_pref: startup
+
 #endif  // NIGHTLY_BUILD
 
 -   name: javascript.options.experimental.json_parse_with_source
@@ -8511,7 +8574,7 @@
 
 - name: layers.force-synchronous-resize
   type: RelaxedAtomicBool
-#ifdef MOZ_WAYLAND
+#if defined(MOZ_WAYLAND) || defined(XP_WIN)
   # We want to control it by nsWindow::SynchronouslyRepaintOnResize() on Linux/Wayland.
   value: false
 #else
@@ -10278,9 +10341,8 @@
 # video frames would be out of sync with audio, and VideoPlaybackQuality
 # metrics would provide no indication of the poor playback. [1]
 # For normal playback, this is false, which does not restore A/V sync in this
-# situation, but the out-of-date frames are dropped and the video playback
-# stalls.  The dropped frame count is reported to content in
-# VideoPlaybackQuality metrics.
+# situation, but some out-of-date frames are dropped.  The dropped frame count
+# is reported to content in VideoPlaybackQuality metrics.
 # [1] https://bugzilla.mozilla.org/show_bug.cgi?id=1258870#c6
 - name: media.ruin-av-sync.enabled
   type: RelaxedAtomicBool
@@ -10991,6 +11053,12 @@
   type: RelaxedAtomicBool
   value: true
   mirror: always
+
+# The delay time (ms) before releasing an audio wakelock.
+-   name: media.wakelock.audio.delay-releasing.ms
+    type: RelaxedAtomicUint32
+    value: 10000
+    mirror: always
 
 # When video continues later than the current media time for this period of
 # time, then it will trigger skip-to-next-keyframe mechanism. As this aims to
@@ -12131,7 +12199,7 @@
 # but still checks for capacity overflow and reports telemetry
 - name: network.cookie.chips.partitionLimitDryRun
   type: bool
-  value: true
+  value: @IS_NOT_NIGHTLY_BUILD@
   mirror: always
 
 # The actual CHIPS parition limit in bytes
@@ -12166,7 +12234,7 @@
 
 - name: network.cookie.sameSite.schemeful
   type: bool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 - name: network.cookie.sameSite.crossSiteIframeSetCheck
@@ -13934,12 +14002,19 @@
 # Whether to use port prefixed QNAME for HTTPS RR
 - name: network.dns.port_prefixed_qname_https_rr
   type: RelaxedAtomicBool
-  value: false
+  value: true
   mirror: always
 
 # Whether to use HTTPS RR and ignore NS_HTTP_DISALLOW_HTTPS_RR
 # This pref is only set when running tests
 - name: network.dns.force_use_https_rr
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# When true, we check if the cname is the same as the target name of the record.
+# If not, the record will not be used.
+- name: network.dns.https_rr.check_record_with_cname
   type: RelaxedAtomicBool
   value: false
   mirror: always
@@ -15654,17 +15729,17 @@
 
 - name: security.tls.enable_certificate_compression_zlib
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 - name: security.tls.enable_certificate_compression_brotli
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 - name: security.tls.enable_certificate_compression_zstd
   type: RelaxedAtomicBool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: true
   mirror: always
 
 - name: security.ssl.treat_unsafe_negotiation_as_broken

@@ -2885,12 +2885,17 @@ void CanvasRenderingContext2D::ParseSpacing(const nsACString& aSpacing,
     if (!GetPresShell()) {
       return;
     }
+    // This will parse aSpacing as a <length-percentage>...
     RefPtr<const ComputedStyle> style =
         ResolveStyleForProperty(eCSSProperty_letter_spacing, aSpacing);
     if (!style) {
       return;
     }
-    value = style->StyleText()->mLetterSpacing.ToCSSPixels();
+    // ...but only <length> is allowed according to the canvas spec.
+    if (!style->StyleText()->mLetterSpacing.IsLength()) {
+      return;
+    }
+    value = style->StyleText()->mLetterSpacing.AsLength().ToCSSPixels();
   }
   aNormalized = normalized;
   *aValue = value;
@@ -4086,6 +4091,9 @@ bool CanvasRenderingContext2D::SetFontInternal(const nsACString& aFont,
   params.explicitLanguage = fontStyle->mExplicitLanguage;
   params.userFontSet = c->GetUserFontSet();
   params.textPerf = c->GetTextPerfMetrics();
+#ifdef XP_WIN
+  params.allowForceGDIClassic = false;
+#endif
   RefPtr<nsFontMetrics> metrics = c->GetMetricsFor(resizedFont, params);
 
   gfxFontGroup* newFontGroup = metrics->GetThebesFontGroup();
@@ -4185,6 +4193,9 @@ bool CanvasRenderingContext2D::SetFontInternalDisconnected(
   }
 
   fontStyle.size = QuantizeFontSize(size);
+#ifdef XP_WIN
+  fontStyle.allowForceGDIClassic = false;
+#endif
 
   switch (CurrentState().fontStretch) {
     case CanvasFontStretch::Normal:

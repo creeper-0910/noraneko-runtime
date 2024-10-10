@@ -116,8 +116,13 @@ RefPtr<ResolvableNormalOriginOp<bool>> CreateClearStorageOp(
 RefPtr<ResolvableNormalOriginOp<bool>> CreateClearOriginOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
     const Maybe<PersistenceType>& aPersistenceType,
+    const mozilla::ipc::PrincipalInfo& aPrincipalInfo);
+
+RefPtr<ResolvableNormalOriginOp<bool>> CreateClearClientOp(
+    MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
+    Maybe<PersistenceType> aPersistenceType,
     const mozilla::ipc::PrincipalInfo& aPrincipalInfo,
-    const Maybe<Client::Type>& aClientType);
+    Client::Type aClientType);
 
 RefPtr<ResolvableNormalOriginOp<bool>> CreateClearStoragesForOriginPrefixOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
@@ -128,9 +133,16 @@ RefPtr<ResolvableNormalOriginOp<bool>> CreateClearDataOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
     const OriginAttributesPattern& aPattern);
 
-RefPtr<QuotaRequestBase> CreateResetOriginOp(
+RefPtr<ResolvableNormalOriginOp<bool>> CreateShutdownOriginOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
-    const RequestParams& aParams);
+    Maybe<PersistenceType> aPersistenceType,
+    const mozilla::ipc::PrincipalInfo& aPrincipalInfo);
+
+RefPtr<ResolvableNormalOriginOp<bool>> CreateShutdownClientOp(
+    MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
+    Maybe<PersistenceType> aPersistenceType,
+    const mozilla::ipc::PrincipalInfo& aPrincipalInfo,
+    Client::Type aClientType);
 
 RefPtr<QuotaRequestBase> CreatePersistedOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,

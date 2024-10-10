@@ -166,7 +166,6 @@
 #include "mozilla/net/CookieKey.h"
 #include "mozilla/net/TRRService.h"
 #include "mozilla/TelemetryComms.h"
-#include "mozilla/TelemetryEventEnums.h"
 #include "mozilla/RemoteLazyInputStreamParent.h"
 #include "mozilla/widget/RemoteLookAndFeel.h"
 #include "mozilla/widget/ScreenManager.h"
@@ -1204,17 +1203,9 @@ IPCResult ContentParent::RecvAttributionConversion(
   return IPC_OK();
 }
 
-Atomic<bool, mozilla::Relaxed> sContentParentTelemetryEventEnabled(false);
-
 /*static*/
 void ContentParent::LogAndAssertFailedPrincipalValidationInfo(
     nsIPrincipal* aPrincipal, const char* aMethod) {
-  // nsContentSecurityManager may also enable this same event, but that's okay
-  if (!sContentParentTelemetryEventEnabled.exchange(true)) {
-    sContentParentTelemetryEventEnabled = true;
-    Telemetry::SetEventRecordingEnabled("security"_ns, true);
-  }
-
   // Send Telemetry
   nsAutoCString principalScheme, principalType, spec;
   mozilla::glean::security::FissionPrincipalsExtra extra = {};
@@ -2430,7 +2421,7 @@ bool ContentParent::BeginSubprocessLaunch(ProcessPriority aPriority) {
     return false;
   }
 
-  std::vector<std::string> extraArgs;
+  geckoargs::ChildProcessArgs extraArgs;
   geckoargs::sIsForBrowser.Put(IsForBrowser(), extraArgs);
   geckoargs::sNotForBrowser.Put(!IsForBrowser(), extraArgs);
 
@@ -2460,13 +2451,11 @@ bool ContentParent::BeginSubprocessLaunch(ProcessPriority aPriority) {
   // happen during async launch.
   Preferences::AddStrongObserver(this, "");
 
-  if (gSafeMode) {
-    geckoargs::sSafeMode.Put(extraArgs);
-  }
+  geckoargs::sSafeMode.Put(gSafeMode, extraArgs);
 
 #if defined(XP_MACOSX) && defined(MOZ_SANDBOX)
   if (IsContentSandboxEnabled()) {
-    AppendSandboxParams(extraArgs);
+    AppendSandboxParams(extraArgs.mArgs);
     mSubprocess->DisableOSActivityMode();
   }
 #endif

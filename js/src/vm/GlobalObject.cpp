@@ -34,7 +34,6 @@
 #include "builtin/ShadowRealm.h"
 #include "builtin/Symbol.h"
 #ifdef JS_HAS_TEMPORAL_API
-#  include "builtin/temporal/Calendar.h"
 #  include "builtin/temporal/Duration.h"
 #  include "builtin/temporal/Instant.h"
 #  include "builtin/temporal/PlainDate.h"
@@ -44,7 +43,6 @@
 #  include "builtin/temporal/PlainYearMonth.h"
 #  include "builtin/temporal/Temporal.h"
 #  include "builtin/temporal/TemporalNow.h"
-#  include "builtin/temporal/TimeZone.h"
 #  include "builtin/temporal/ZonedDateTime.h"
 #endif
 #include "builtin/WeakMapObject.h"
@@ -98,7 +96,7 @@ extern const JSClass ReflectClass;
 
 }  // namespace js
 
-static const JSClass* const protoTable[JSProto_LIMIT] = {
+static constexpr const JSClass* const protoTable[JSProto_LIMIT] = {
 #define INIT_FUNC(name, clasp) clasp,
 #define INIT_FUNC_DUMMY(name, clasp) nullptr,
     JS_FOR_PROTOTYPES(INIT_FUNC, INIT_FUNC_DUMMY)
@@ -229,7 +227,6 @@ bool GlobalObject::skipDeselectedConstructor(JSContext* cx, JSProtoKey key) {
 
 #ifdef JS_HAS_TEMPORAL_API
     case JSProto_Temporal:
-    case JSProto_Calendar:
     case JSProto_Duration:
     case JSProto_Instant:
     case JSProto_PlainDate:
@@ -238,7 +235,6 @@ bool GlobalObject::skipDeselectedConstructor(JSContext* cx, JSProtoKey key) {
     case JSProto_PlainTime:
     case JSProto_PlainYearMonth:
     case JSProto_TemporalNow:
-    case JSProto_TimeZone:
     case JSProto_ZonedDateTime:
       return false;
 #endif

@@ -332,10 +332,10 @@ const nsTHashSet<const nsINode*>& SelectionNodeCache::MaybeCollect(
     for (size_t rangeIndex = 0; rangeIndex < sel->RangeCount(); ++rangeIndex) {
       AbstractRange* range = sel->GetAbstractRangeAt(rangeIndex);
       MOZ_ASSERT(range);
-      if(range->Collapsed()) {
+      if (range->Collapsed()) {
         continue;
       }
-      if(range->IsStaticRange() && !range->AsStaticRange()->IsValid()) {
+      if (range->IsStaticRange() && !range->AsStaticRange()->IsValid()) {
         continue;
       }
       const RangeBoundary& startRef = range->MayCrossShadowBoundaryStartRef();

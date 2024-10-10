@@ -188,6 +188,7 @@ export var UrlbarUtils = {
     "oneoff",
     "historymenu",
     "other",
+    "searchbutton",
     "shortcut",
     "tabmenu",
     "tabtosearch",
@@ -1800,6 +1801,9 @@ UrlbarUtils.RESULT_PAYLOAD_SCHEMA = {
         type: "boolean",
       },
       keyword: {
+        type: "string",
+      },
+      keywords: {
         type: "string",
       },
       lowerCaseSuggestion: {

@@ -1453,7 +1453,6 @@ pref("app.support.baseURL", "https://support.mozilla.org/1/firefox/%VERSION%/%OS
 // base url for web-based feedback pages
 pref("app.feedback.baseURL", "https://ideas.mozilla.org/");
 
-pref("security.certerrors.recordEventTelemetry", true);
 pref("security.certerrors.permanentOverride", true);
 pref("security.certerrors.mitm.priming.enabled", true);
 pref("security.certerrors.mitm.priming.endpoint", "https://mitmdetection.services.mozilla.com/");
@@ -1871,14 +1870,13 @@ pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.enabled
   // List of regions that get topics selection by default.
   pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.region-topics-config", "US, CA");
   pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.onboarding.enabled", true);
-  pref("browser.newtabpage.activity-stream.discoverystream.topicLabels.region-topic-label-config", "US, CA");
 #else
   pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.region-topics-config", "");
   pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.onboarding.enabled", false);
-  pref("browser.newtabpage.activity-stream.discoverystream.topicLabels.region-topic-label-config", "");
 #endif
 
 // List of locales that get topics selection by default.
+pref("browser.newtabpage.activity-stream.discoverystream.topicLabels.region-topic-label-config", "US, CA");
 pref("browser.newtabpage.activity-stream.discoverystream.topicSelection.locale-topics-config", "en-US, en-GB, en-CA");
 pref("browser.newtabpage.activity-stream.discoverystream.topicLabels.locale-topic-label-config", "en-US, en-GB, en-CA");
 
@@ -1991,20 +1989,14 @@ pref("browser.ml.chat.enabled", false);
 pref("browser.ml.chat.hideLocalhost", true);
 pref("browser.ml.chat.prompt.prefix", '{"l10nId":"genai-prompt-prefix-selection"}');
 pref("browser.ml.chat.prompts.0", '{"id":"summarize","l10nId":"genai-prompts-summarize"}');
-pref("browser.ml.chat.prompts.1", '{"id":"simplify","l10nId":"genai-prompts-simplify"}');
-pref("browser.ml.chat.prompts.2", '{"id":"quiz","l10nId":"genai-prompts-quiz","targeting":"!provider|regExpMatch(\'gemini\')"}');
-pref("browser.ml.chat.prompts.3", '{"id":"explain","l10nId":"genai-prompts-explain","targeting":"channel==\'nightly\'"}');
+pref("browser.ml.chat.prompts.1", '{"id":"explain","l10nId":"genai-prompts-explain"}');
+pref("browser.ml.chat.prompts.2", '{"id":"simplify","l10nId":"genai-prompts-simplify","targeting":"channel==\'nightly\'"}');
+pref("browser.ml.chat.prompts.3", '{"id":"quiz","l10nId":"genai-prompts-quiz","targeting":"!provider|regExpMatch(\'gemini\') || region == \'US\'"}');
 pref("browser.ml.chat.provider", "");
 pref("browser.ml.chat.shortcuts", true);
-#ifdef NIGHTLY_BUILD
 pref("browser.ml.chat.shortcuts.custom", true);
-#else
-pref("browser.ml.chat.shortcuts.custom", false);
-#endif
 pref("browser.ml.chat.shortcuts.longPress", 60000);
 pref("browser.ml.chat.sidebar", true);
-
-pref("security.protectionspopup.recordEventTelemetry", true);
 
 // Block insecure active content on https pages
 pref("security.mixed_content.block_active_content", true);
@@ -2174,11 +2166,6 @@ pref("privacy.trackingprotection.fingerprinting.enabled", true);
 pref("privacy.trackingprotection.cryptomining.enabled", true);
 
 pref("browser.contentblocking.database.enabled", true);
-
-// Enable URL query stripping in Nightly.
-#ifdef NIGHTLY_BUILD
-pref("privacy.query_stripping.enabled", true);
-#endif
 
 // Enable Strip on Share by default on desktop
 pref("privacy.query_stripping.strip_on_share.enabled", true);
@@ -2502,8 +2489,6 @@ pref("extensions.pocket.loggedOutVariant", "control");
 pref("extensions.pocket.refresh.emailButton.enabled", false);
 // Hides the recently saved section in the home panel.
 pref("extensions.pocket.refresh.hideRecentSaves.enabled", false);
-
-pref("signon.management.page.fileImport.enabled", true);
 
 // "available"      - user can see feature offer.
 // "offered"        - we have offered feature to user and they have not yet made a decision.

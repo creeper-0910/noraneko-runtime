@@ -131,7 +131,7 @@ class AsyncRequestHelper final : public Runnable,
   NS_DECL_NSIRUNNABLE
 
   // LSRequestChildCallback
-  void OnResponse(const LSRequestResponse& aResponse) override;
+  void OnResponse(LSRequestResponse&& aResponse) override;
 };
 
 class SimpleRequestResolver final : public LSSimpleRequestChildCallback {
@@ -502,7 +502,16 @@ void AsyncRequestHelper::Finish() {
 
       case LSRequestResponse::TLSRequestPreloadDatastoreResponse:
         if (mPromise) {
-          mPromise->MaybeResolveWithUndefined();
+          const LSRequestPreloadDatastoreResponse& preloadDatastoreResponse =
+              mResponse.get_LSRequestPreloadDatastoreResponse();
+
+          const bool invalidated = preloadDatastoreResponse.invalidated();
+
+          if (invalidated) {
+            mPromise->MaybeReject(NS_ERROR_ABORT);
+          } else {
+            mPromise->MaybeResolveWithUndefined();
+          }
         }
         break;
       default:
@@ -553,13 +562,13 @@ AsyncRequestHelper::Run() {
   return NS_OK;
 }
 
-void AsyncRequestHelper::OnResponse(const LSRequestResponse& aResponse) {
+void AsyncRequestHelper::OnResponse(LSRequestResponse&& aResponse) {
   AssertIsOnDOMFileThread();
   MOZ_ASSERT(mState == State::ResponsePending);
 
   mActor = nullptr;
 
-  mResponse = aResponse;
+  mResponse = std::move(aResponse);
 
   mState = State::Finishing;
 

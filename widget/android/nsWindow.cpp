@@ -896,15 +896,57 @@ class NPZCSupport final
 
   void HandleDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
                        jni::Object::Param aDropData) {
-    // APZ handles some drag event type on APZ thread, but it cannot handle all
-    // types.
-    MOZ_ASSERT(NS_IsMainThread());
+    MOZ_ASSERT(AndroidBridge::IsJavaUiThread());
 
+    RefPtr<IAPZCTreeManager> controller;
     if (auto window = mWindow.Access()) {
       if (nsWindow* gkWindow = window->GetNsWindow()) {
-        gkWindow->OnDragEvent(aAction, aTime, aX, aY, aDropData);
+        controller = gkWindow->mAPZC;
       }
     }
+
+    if (!controller) {
+      return;
+    }
+
+    MouseInput::MouseType mouseType = MouseInput::MouseType::MOUSE_NONE;
+    switch (aAction) {
+      case java::sdk::DragEvent::ACTION_DRAG_STARTED:
+        mouseType = MouseInput::MouseType::MOUSE_DRAG_START;
+        break;
+      case java::sdk::DragEvent::ACTION_DRAG_ENDED:
+        mouseType = MouseInput::MouseType::MOUSE_DRAG_END;
+        break;
+      case java::sdk::DragEvent::ACTION_DRAG_ENTERED:
+        mouseType = MouseInput::MouseType::MOUSE_DRAG_ENTER;
+        break;
+      case java::sdk::DragEvent::ACTION_DRAG_LOCATION:
+        mouseType = MouseInput::MouseType::MOUSE_DRAG_OVER;
+        break;
+      case java::sdk::DragEvent::ACTION_DRAG_EXITED:
+        mouseType = MouseInput::MouseType::MOUSE_DRAG_EXIT;
+        break;
+      case java::sdk::DragEvent::ACTION_DROP:
+        mouseType = MouseInput::MouseType::MOUSE_DROP;
+        break;
+      default:
+        break;
+    }
+    ScreenPoint origin = ScreenPoint(aX, aY);
+    MouseInput input(
+        mouseType, MouseInput::NONE, MouseEvent_Binding::MOZ_SOURCE_MOUSE, 0,
+        origin, nsWindow::GetEventTimeStamp(aTime), nsWindow::GetModifiers(0));
+
+    APZEventResult result = controller->InputBridge()->ReceiveInputEvent(input);
+    if (result.GetStatus() == nsEventStatus_eConsumeNoDefault) {
+      return;
+    }
+
+    PostInputEvent(
+        [input = std::move(input), result, aAction, aX, aY,
+         dropData = jni::Object::GlobalRef(aDropData)](nsWindow* window) {
+          window->OnDragEvent(aAction, aX, aY, dropData, result, input);
+        });
   }
 
   void ConsumeMotionEventsFromResampler() {
@@ -995,7 +1037,7 @@ class NPZCSupport final
   }
 };
 
-NS_IMPL_ISUPPORTS(AndroidView, nsIAndroidEventDispatcher, nsIAndroidView)
+NS_IMPL_ISUPPORTS(AndroidView, nsIGeckoViewEventDispatcher, nsIGeckoViewView)
 
 nsresult AndroidView::GetInitData(JSContext* aCx,
                                   JS::MutableHandle<JS::Value> aOut) {
@@ -1745,7 +1787,7 @@ void GeckoViewSupport::Open(
     }
   }
 
-  // Prepare an nsIAndroidView to pass as argument to the window.
+  // Prepare an nsIGeckoViewView to pass as argument to the window.
   RefPtr<AndroidView> androidView = new AndroidView();
   androidView->mEventDispatcher->Attach(
       java::EventDispatcher::Ref::From(aDispatcher), nullptr);
@@ -2168,23 +2210,12 @@ bool nsWindow::IsTopLevel() {
          mWindowType == WindowType::Invisible;
 }
 
-nsresult nsWindow::Create(nsIWidget* aParent, nsNativeWidget aNativeParent,
-                          const LayoutDeviceIntRect& aRect,
+nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
                           InitData* aInitData) {
   ALOG("nsWindow[%p]::Create %p [%d %d %d %d]", (void*)this, (void*)aParent,
        aRect.x, aRect.y, aRect.width, aRect.height);
 
   nsWindow* parent = (nsWindow*)aParent;
-  if (aNativeParent) {
-    if (parent) {
-      ALOG(
-          "Ignoring native parent on Android window [%p], "
-          "since parent was specified (%p %p)",
-          (void*)this, (void*)aNativeParent, (void*)aParent);
-    } else {
-      parent = (nsWindow*)aNativeParent;
-    }
-  }
 
   // A default size of 1x1 confuses MobileViewportManager, so
   // use 0x0 instead. This is also a little more fitting since
@@ -2199,6 +2230,11 @@ nsresult nsWindow::Create(nsIWidget* aParent, nsNativeWidget aNativeParent,
   mBounds = rect;
   SetSizeConstraints(SizeConstraints());
 
+  MOZ_DIAGNOSTIC_ASSERT(!aInitData ||
+                        aInitData->mWindowType != WindowType::Invisible);
+
+  // FIXME(emilio): Seems we should pass aParent here, but I don't think we can
+  // have child widgets on android.
   BaseCreate(nullptr, aInitData);
 
   NS_ASSERTION(IsTopLevel() || parent,
@@ -2206,7 +2242,6 @@ nsresult nsWindow::Create(nsIWidget* aParent, nsNativeWidget aNativeParent,
 
   if (IsTopLevel()) {
     gTopLevelWindows.AppendElement(this);
-
   } else if (parent) {
     parent->mChildren.AppendElement(this);
     mParent = parent;
@@ -2674,22 +2709,10 @@ void nsWindow::ShowDynamicToolbar() {
   acc->OnShowDynamicToolbar();
 }
 
-static EventMessage convertDragEventActionToGeckoEvent(int32_t aAction) {
-  switch (aAction) {
-    case java::sdk::DragEvent::ACTION_DRAG_ENTERED:
-      return eDragEnter;
-    case java::sdk::DragEvent::ACTION_DRAG_EXITED:
-      return eDragExit;
-    case java::sdk::DragEvent::ACTION_DRAG_LOCATION:
-      return eDragOver;
-    case java::sdk::DragEvent::ACTION_DROP:
-      return eDrop;
-  }
-  return eVoidEvent;
-}
-
-void nsWindow::OnDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
-                           jni::Object::Param aDropData) {
+void nsWindow::OnDragEvent(int32_t aAction, float aX, float aY,
+                           jni::Object::Param aDropData,
+                           const mozilla::layers::APZEventResult& aApzResult,
+                           const MouseInput& aInput) {
   MOZ_ASSERT(NS_IsMainThread());
 
   LayoutDeviceIntPoint point =
@@ -2702,19 +2725,21 @@ void nsWindow::OnDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
 
   RefPtr<nsDragSession> dragSession =
       static_cast<nsDragSession*>(dragService->GetCurrentSession(this));
-  if (dragSession && aAction == java::sdk::DragEvent::ACTION_DRAG_STARTED) {
-    dragSession->SetDragEndPoint(point.x, point.y);
+  if (aAction == java::sdk::DragEvent::ACTION_DRAG_STARTED) {
+    if (dragSession) {
+      dragSession->SetDragEndPoint(point.x, point.y);
+    }
     return;
   }
 
-  if (dragSession && aAction == java::sdk::DragEvent::ACTION_DRAG_ENDED) {
-    dragSession->EndDragSession(false, 0);
+  if (aAction == java::sdk::DragEvent::ACTION_DRAG_ENDED) {
+    if (dragSession) {
+      dragSession->EndDragSession(false, 0);
+    }
     return;
   }
 
-  EventMessage message = convertDragEventActionToGeckoEvent(aAction);
-
-  if (message == eDragEnter) {
+  if (aAction == java::sdk::DragEvent::ACTION_DRAG_ENTERED) {
     nsIWidget* widget = this;
     dragSession =
         static_cast<nsDragSession*>(dragService->StartDragSession(widget));
@@ -2725,12 +2750,12 @@ void nsWindow::OnDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
   }
 
   if (dragSession) {
-    switch (message) {
-      case eDragOver:
+    switch (aAction) {
+      case java::sdk::DragEvent::ACTION_DRAG_LOCATION:
         dragSession->SetDragEndPoint(point.x, point.y);
         dragSession->FireDragEventAtSource(eDrag, 0);
         break;
-      case eDrop: {
+      case java::sdk::DragEvent::ACTION_DROP: {
         bool canDrop = false;
         dragSession->GetCanDrop(&canDrop);
         if (!canDrop) {
@@ -2754,18 +2779,15 @@ void nsWindow::OnDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
     dragSession->SetDragAction(nsIDragService::DRAGDROP_ACTION_MOVE);
   }
 
-  WidgetDragEvent geckoEvent(true, message, this);
-  geckoEvent.mRefPoint = point;
-  geckoEvent.mTimeStamp = nsWindow::GetEventTimeStamp(aTime);
-  geckoEvent.mModifiers = 0;  // DragEvent has no modifiers
-  DispatchInputEvent(&geckoEvent);
+  WidgetDragEvent geckoEvent = aInput.ToWidgetEvent<WidgetDragEvent>(this);
+  ProcessUntransformedAPZEvent(&geckoEvent, aApzResult);
 
   if (!dragSession) {
     return;
   }
 
-  switch (message) {
-    case eDragExit: {
+  switch (aAction) {
+    case java::sdk::DragEvent::ACTION_DRAG_EXITED: {
       nsCOMPtr<nsINode> sourceNode;
       dragSession->GetSourceNode(getter_AddRefs(sourceNode));
       if (!sourceNode) {
@@ -2777,7 +2799,7 @@ void nsWindow::OnDragEvent(int32_t aAction, int64_t aTime, float aX, float aY,
       }
       break;
     }
-    case eDrop:
+    case java::sdk::DragEvent::ACTION_DROP:
       dragSession->EndDragSession(true, 0);
       break;
     default:

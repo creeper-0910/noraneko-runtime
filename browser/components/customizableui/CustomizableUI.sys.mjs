@@ -217,26 +217,10 @@ XPCOMUtils.defineLazyPreferenceGetter(
       CustomizableUI.AREA_NAVBAR
     );
     if (!navbarPlacements.includes("sidebar-button")) {
-      // Find a spot for the sidebar-button.
-      // If any of the home, reload or fwd button are in there, we'll place next that.
-      let position;
-      for (let widgetId of [
-        "home-button",
-        "stop-reload-button",
-        "forward-button",
-      ]) {
-        position = navbarPlacements.indexOf(widgetId);
-        if (position > -1) {
-          position += 1;
-          break;
-        }
-      }
-      // Its not currently possible to move the forward-button out of the navbar, but we'll
-      // ensure the insert position is at least 0 just in case
       CustomizableUI.addWidgetToArea(
         "sidebar-button",
         CustomizableUI.AREA_NAVBAR,
-        Math.max(0, position)
+        0
       );
     }
   }
@@ -313,13 +297,13 @@ var CustomizableUIInternal = {
     );
 
     let navbarPlacements = [
+      lazy.sidebarRevampEnabled ? "sidebar-button" : null,
       "back-button",
       "forward-button",
       "stop-reload-button",
       Services.policies.isAllowed("removeHomeButtonByDefault")
         ? null
         : "home-button",
-      lazy.sidebarRevampEnabled ? "sidebar-button" : null,
       "spring",
       "urlbar-container",
       "spring",
@@ -520,7 +504,7 @@ var CustomizableUIInternal = {
       }
 
       if (!newPlacements.includes("sidebar-button")) {
-        newPlacements.push("sidebar-button");
+        newPlacements.unshift("sidebar-button");
       }
 
       gSavedState.placements[CustomizableUI.AREA_NAVBAR] = newPlacements;
@@ -2673,6 +2657,16 @@ var CustomizableUIInternal = {
     this.saveState();
     gDirtyAreaCache.add(oldPlacement.area);
 
+    // If we're in vertical tabs, ensure we don't restore the widget when we toggle back
+    // to horizontal tabs.
+    if (
+      !gInBatchStack &&
+      CustomizableUI.verticalTabsEnabled &&
+      oldPlacement.area == CustomizableUI.AREA_TABSTRIP
+    ) {
+      this.deleteWidgetInSavedHorizontalTabStripState(aWidgetId);
+    }
+
     this.notifyListeners("onWidgetRemoved", aWidgetId, oldPlacement.area);
   },
 
@@ -2896,6 +2890,15 @@ var CustomizableUIInternal = {
     }
 
     this.endBatchUpdate();
+  },
+
+  deleteWidgetInSavedHorizontalTabStripState(aWidgetId) {
+    const savedPlacements = this.getSavedHorizontalSnapshotState();
+    let position = savedPlacements.indexOf(aWidgetId);
+    if (position != -1) {
+      savedPlacements.splice(position, 1);
+      this.saveHorizontalTabStripState(savedPlacements);
+    }
   },
 
   saveHorizontalTabStripState(placements = []) {
@@ -3998,6 +4001,33 @@ var CustomizableUIInternal = {
     }
   },
 
+  widgetIsLikelyVisible(aWidgetId, window) {
+    let placement = this.getPlacementOfWidget(aWidgetId);
+
+    if (!placement) {
+      return false;
+    }
+
+    switch (placement.area) {
+      case CustomizableUI.AREA_NAVBAR:
+        return true;
+      case CustomizableUI.AREA_MENUBAR:
+        return !this.getCollapsedToolbarIds(window).has(
+          CustomizableUI.AREA_MENUBAR
+        );
+      case CustomizableUI.AREA_TABSTRIP:
+        return !CustomizableUI.verticalTabsEnabled;
+      case CustomizableUI.AREA_BOOKMARKS:
+        return (
+          Services.prefs.getCharPref(
+            "browser.toolbars.bookmarks.visibility"
+          ) === "always"
+        );
+      default:
+        return false;
+    }
+  },
+
   observe(aSubject, aTopic, aData) {
     if (aTopic == "browser-set-toolbar-visibility") {
       let [toolbar, visibility] = JSON.parse(aData);
@@ -4191,7 +4221,6 @@ var CustomizableUIInternal = {
 
     // Normally these aren't removable, but for this operation only we need to move them
     changeWidgetRemovability("tabbrowser-tabs", true);
-    changeWidgetRemovability("alltabs-button", true);
 
     if (toVertical) {
       lazy.log.debug(
@@ -4240,14 +4269,16 @@ var CustomizableUIInternal = {
       isVertical: toVertical,
     });
 
-    lazy.log.debug("Reverting widgets to be non-removable");
-    changeWidgetRemovability("tabbrowser-tabs", false);
-    changeWidgetRemovability("alltabs-button", false);
-
     this.setToolbarVisibility(
       CustomizableUI.AREA_VERTICAL_TABSTRIP,
       toVertical
     );
+    this.setToolbarVisibility(CustomizableUI.AREA_TABSTRIP, !toVertical);
+    changeWidgetRemovability("tabbrowser-tabs", false);
+
+    for (let [win] of gBuildWindows) {
+      win.TabBarVisibility.update(true);
+    }
   },
 };
 Object.freeze(CustomizableUIInternal);
@@ -5105,6 +5136,27 @@ export var CustomizableUI = {
    */
   getCollapsedToolbarIds(window) {
     return CustomizableUIInternal.getCollapsedToolbarIds(window);
+  },
+
+  /**
+   * Checks if a widget is likely visible in a given window.
+   *
+   * This method returns true when a widget is:
+   *  - Not pinned to the overflow menu
+   *  - Not in a collapsed toolbar (e.g. bookmarks toolbar, menu bar)
+   *  - Not in the customization palette
+   *
+   * Note: A widget that is moved into the overflow menu due to
+   *       the window being small might be considered visible by
+   *       this method, because a widget's placement does not
+   *       change when it overflows into the overflow menu.
+   *
+   * @param aWidgetId the widget ID to check.
+   * @param {Window} window The browser window to check for widget visibility.
+   * @returns {Boolean} whether the given widget is likely visible or not.
+   */
+  widgetIsLikelyVisible(aWidgetId, window) {
+    return CustomizableUIInternal.widgetIsLikelyVisible(aWidgetId, window);
   },
 
   /**

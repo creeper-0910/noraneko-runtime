@@ -198,7 +198,7 @@ class ThreeDotMenuMainRobot {
         )
     }
 
-    fun verifyHomeThreeDotMainMenuItems(isRequestDesktopSiteEnabled: Boolean) {
+    fun verifyHomeThreeDotMainMenuItems() {
         assertUIObjectExists(
             bookmarksButton(),
             historyButton(),
@@ -207,12 +207,10 @@ class ThreeDotMenuMainRobot {
             addOnsButton(),
             // Disabled step due to https://github.com/mozilla-mobile/fenix/issues/26788
             // syncAndSaveDataButton,
-            desktopSiteButton(),
             whatsNewButton(),
             helpButton(),
             customizeHomeButton(),
             settingsButton(),
-            desktopSiteToggle(isRequestDesktopSiteEnabled),
         )
     }
 
@@ -244,10 +242,26 @@ class ThreeDotMenuMainRobot {
     }
 
     fun verifyTrackersBlockedByUblock() {
-        assertUIObjectExists(itemWithResId("$packageName:id/badge_text"))
-        Log.i(TAG, "verifyTrackersBlockedByUblock: Trying to verify that the count of trackers blocked is greater than 0")
-        assertTrue("$TAG: The count of trackers blocked is not greater than 0", itemWithResId("$packageName:id/badge_text").text.toInt() > 0)
-        Log.i(TAG, "verifyTrackersBlockedByUblock: Verified that the count of trackers blocked is greater than 0")
+        for (i in 1..RETRY_COUNT) {
+            Log.i(TAG, "verifyTrackersBlockedByUblock: Started try #$i")
+            try {
+                assertUIObjectExists(itemWithResId("$packageName:id/badge_text"))
+                Log.i(TAG, "verifyTrackersBlockedByUblock: Trying to verify that the count of trackers blocked is greater than 0")
+                assertTrue("$TAG: The count of trackers blocked is not greater than 0", itemWithResId("$packageName:id/badge_text").text.toInt() > 0)
+                Log.i(TAG, "verifyTrackersBlockedByUblock: Verified that the count of trackers blocked is greater than 0")
+
+                break
+            } catch (e: NumberFormatException) {
+                Log.i(TAG, "verifyTrackersBlockedByUblock: NumberFormatException caught, executing fallback methods")
+                Log.i(TAG, "verifyTrackersBlockedByUblock: Trying to click the device back button")
+                mDevice.pressBack()
+                Log.i(TAG, "verifyTrackersBlockedByUblock: Clicked the device back button")
+                browserScreen {
+                }.openThreeDotMenu {
+                    openAddonsSubList()
+                }
+            }
+        }
     }
 
     fun clickQuit() {

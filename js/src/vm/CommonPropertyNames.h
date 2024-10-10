@@ -138,6 +138,7 @@
   MACRO_(deleteProperty, "deleteProperty")                                     \
   MACRO_(detached, "detached")                                                 \
   MACRO_(difference, "difference")                                             \
+  MACRO_(direction, "direction")                                               \
   MACRO_(disambiguation, "disambiguation")                                     \
   MACRO_(displayURL, "displayURL")                                             \
   MACRO2(do_, "do")                                                            \
@@ -547,6 +548,7 @@
   MACRO_(String_split, "String_split")                                         \
   MACRO_(StructType, "StructType")                                             \
   MACRO_(style, "style")                                                       \
+  MACRO_(sumPrecise, "sumPrecise")                                             \
   MACRO_(super, "super")                                                       \
   IF_EXPLICIT_RESOURCE_MANAGEMENT(MACRO_(suppressed, "suppressed"))            \
   MACRO_(switch_, "switch")                                                    \
@@ -649,6 +651,7 @@
   MACRO_(years, "years")                                                       \
   MACRO_(yield, "yield")                                                       \
   MACRO_(zero, "zero")                                                         \
+  MACRO_(zip, "zip")                                                           \
   /* Type names must be contiguous and ordered; see js::TypeName. */           \
   MACRO_(undefined, "undefined")                                               \
   MACRO_(object, "object")                                                     \

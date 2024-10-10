@@ -3381,6 +3381,7 @@ static bool Quit(JSContext* cx, unsigned argc, Value* vp) {
   }
 
   SetQuitting(cx, code);
+  JS::ReportUncatchableException(cx);
   return false;
 }
 
@@ -5237,11 +5238,14 @@ static bool StackDump(JSContext* cx, unsigned argc, Value* vp) {
 }
 #endif
 
-static bool StackPointerInfo(JSContext* cx, unsigned argc, Value* vp) {
+MOZ_ASAN_IGNORE static bool StackPointerInfo(JSContext* cx, unsigned argc,
+                                             Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
 
   // Copy the truncated stack pointer to the result.  This value is not used
   // as a pointer but as a way to measure frame-size from JS.
+  // The ASAN must be disabled for this function -- it may allocate `args`
+  // not on the stack.
   args.rval().setInt32(int32_t(reinterpret_cast<size_t>(&args) & 0xfffffff));
   return true;
 }
@@ -5284,6 +5288,7 @@ static bool ParseModule(JSContext* cx, unsigned argc, Value* vp) {
 
   UniqueChars filename;
   CompileOptions options(cx);
+  bool jsonModule = false;
   if (args.length() > 1) {
     if (!args[1].isString()) {
       const char* typeName = InformalValueTypeName(args[1]);
@@ -5298,10 +5303,34 @@ static bool ParseModule(JSContext* cx, unsigned argc, Value* vp) {
     }
 
     options.setFileAndLine(filename.get(), 1);
+
+    // The 2nd argument is the module type string. "js" or "json" is expected.
+    if (args.length() == 3) {
+      if (!args[2].isString()) {
+        const char* typeName = InformalValueTypeName(args[2]);
+        JS_ReportErrorASCII(cx, "expected moduleType string, got %s", typeName);
+        return false;
+      }
+
+      RootedString str(cx, args[2].toString());
+      JSLinearString* linearStr = JS_EnsureLinearString(cx, str);
+      if (!linearStr) {
+        return false;
+      }
+      if (JS_LinearStringEqualsLiteral(linearStr, "json")) {
+        jsonModule = true;
+      } else if (!JS_LinearStringEqualsLiteral(linearStr, "js")) {
+        UniqueChars modType = JS_EncodeStringToUTF8(cx, str);
+        JS_ReportErrorASCII(
+            cx,
+            "unexpected moduleType string (expected 'js' or 'json'), got %s",
+            modType.get());
+        return false;
+      }
+    }
   } else {
     options.setFileAndLine("<string>", 1);
   }
-  options.setModule();
 
   AutoStableStringChars linearChars(cx);
   if (!linearChars.initTwoByte(cx, scriptContents)) {
@@ -5313,8 +5342,14 @@ static bool ParseModule(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-  AutoReportFrontendContext fc(cx);
-  RootedObject module(cx, frontend::CompileModule(cx, &fc, options, srcBuf));
+  RootedObject module(cx);
+  if (jsonModule) {
+    module = JS::CompileJsonModule(cx, options, srcBuf);
+  } else {
+    AutoReportFrontendContext fc(cx);
+    options.setModule();
+    module = frontend::CompileModule(cx, &fc, options, srcBuf);
+  }
   if (!module) {
     return false;
   }
@@ -5594,9 +5629,13 @@ static bool RegisterModule(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-  Rooted<ImportAttributeVector> attributes(cx);
+  JS::ModuleType moduleType = JS::ModuleType::JavaScript;
+  if (module->hasSyntheticModuleFields()) {
+    moduleType = JS::ModuleType::JSON;
+  }
+
   RootedObject moduleRequest(
-      cx, ModuleRequestObject::create(cx, specifier, attributes));
+      cx, ModuleRequestObject::create(cx, specifier, moduleType));
   if (!moduleRequest) {
     return false;
   }
@@ -9335,6 +9374,7 @@ static bool SideEffectfulResolveObject_resolve(JSContext* cx, HandleObject obj,
                                                HandleId id, bool* resolvedp) {
   *resolvedp = false;
   if (JS::dbg::ShouldAvoidSideEffects(cx)) {
+    JS::ReportUncatchableException(cx);
     return false;
   }
 
@@ -9585,9 +9625,10 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 "sleep(dt)",
 "  Sleep for dt seconds."),
 
-    JS_FN_HELP("parseModule", ParseModule, 1, 0,
-"parseModule(code)",
-"  Parses source text as a module and returns a ModuleObject wrapper object."),
+    JS_FN_HELP("parseModule", ParseModule, 3, 0,
+"parseModule(code, 'filename', 'js' | 'json')",
+"  Parses source text as a JS module ('js', this is the default) or a JSON"
+" module ('json') and returns a ModuleObject wrapper object."),
 
     JS_FN_HELP("instantiateModuleStencil", InstantiateModuleStencil, 1, 0,
 "instantiateModuleStencil(stencil, [options])",
@@ -12679,7 +12720,13 @@ bool InitOptionParser(OptionParser& op) {
                         "Enable WebAssembly tail-calls proposal.") ||
       !op.addBoolOption('\0', "wasm-js-string-builtins",
                         "Enable WebAssembly js-string-builtins proposal.") ||
-      !op.addBoolOption('\0', "enable-promise-try", "Enable Promise.try")) {
+      !op.addBoolOption('\0', "enable-promise-try", "Enable Promise.try") ||
+      !op.addBoolOption('\0', "enable-math-sumprecise",
+                        "Enable Math.sumPrecise") ||
+      !op.addBoolOption('\0', "enable-iterator-range",
+                        "Enable Iterator.range") ||
+      !op.addBoolOption('\0', "enable-joint-iteration",
+                        "Enable Joint Iteration")) {
     return false;
   }
 
@@ -12758,6 +12805,15 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
   if (op.getBoolOption("enable-promise-try")) {
     JS::Prefs::setAtStartup_experimental_promise_try(true);
   }
+  if (op.getBoolOption("enable-math-sumprecise")) {
+    JS::Prefs::setAtStartup_experimental_math_sumprecise(true);
+  }
+  if (op.getBoolOption("enable-iterator-range")) {
+    JS::Prefs::setAtStartup_experimental_iterator_range(true);
+  }
+  if (op.getBoolOption("enable-joint-iteration")) {
+    JS::Prefs::setAtStartup_experimental_joint_iteration(true);
+  }
 #endif
   if (op.getBoolOption("enable-json-parse-with-source")) {
     JS::Prefs::set_experimental_json_parse_with_source(true);
@@ -12833,6 +12889,18 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
 #if defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_X64)
   MOZ_ASSERT(!js::jit::CPUFlagsHaveBeenComputed());
 
+  if (op.getBoolOption("no-avx")) {
+    js::jit::CPUInfo::SetAVXDisabled();
+    if (!sCompilerProcessFlags.append("--no-avx")) {
+      return false;
+    }
+  }
+  if (op.getBoolOption("enable-avx")) {
+    js::jit::CPUInfo::SetAVXEnabled();
+    if (!sCompilerProcessFlags.append("--enable-avx")) {
+      return false;
+    }
+  }
   if (op.getBoolOption("no-sse3")) {
     js::jit::CPUInfo::SetSSE3Disabled();
     if (!sCompilerProcessFlags.append("--no-sse3")) {
@@ -12854,18 +12922,6 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
   if (op.getBoolOption("no-sse42")) {
     js::jit::CPUInfo::SetSSE42Disabled();
     if (!sCompilerProcessFlags.append("--no-sse42")) {
-      return false;
-    }
-  }
-  if (op.getBoolOption("no-avx")) {
-    js::jit::CPUInfo::SetAVXDisabled();
-    if (!sCompilerProcessFlags.append("--no-avx")) {
-      return false;
-    }
-  }
-  if (op.getBoolOption("enable-avx")) {
-    js::jit::CPUInfo::SetAVXEnabled();
-    if (!sCompilerProcessFlags.append("--enable-avx")) {
       return false;
     }
   }

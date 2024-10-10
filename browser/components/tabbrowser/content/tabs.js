@@ -13,6 +13,9 @@
 
   class MozTabbrowserTabs extends MozElements.TabsBase {
     static observedAttributes = ["orient"];
+
+    #maxTabsPerRow;
+
     constructor() {
       super();
 
@@ -75,9 +78,7 @@
         "browser.tabs.tabClipWidth"
       );
       this._hiddenSoundPlayingTabs = new Set();
-      this._allTabs = null;
-      this._visibleTabs = null;
-      this._previewPanel = null;
+      this.previewPanel = null;
 
       this.allTabs[0].label = this.emptyTabTitle;
 
@@ -151,7 +152,6 @@
         false
       );
       this.tooltip = "tabbrowser-tab-tooltip";
-      this._previewPanel = null;
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -233,20 +233,20 @@
       if (!this._showCardPreviews) {
         return;
       }
-      if (!this._previewPanel) {
+      if (!this.previewPanel) {
         // load the tab preview component
         const TabHoverPreviewPanel = ChromeUtils.importESModule(
           "chrome://browser/content/tabbrowser/tab-hover-preview.mjs"
         ).default;
-        this._previewPanel = new TabHoverPreviewPanel(
+        this.previewPanel = new TabHoverPreviewPanel(
           document.getElementById("tab-preview-panel")
         );
       }
-      this._previewPanel.activate(event.target);
+      this.previewPanel.activate(event.target);
     }
 
     on_TabHoverEnd(event) {
-      this._previewPanel?.deactivate(event.target);
+      this.previewPanel?.deactivate(event.target);
     }
 
     on_TabGroupExpand() {
@@ -388,7 +388,7 @@
         ) {
           // Check whether the click
           // was dispatched on the open space of it.
-          let visibleTabs = this._getVisibleTabs();
+          let visibleTabs = this.visibleTabs;
           let lastTab = visibleTabs.at(-1);
           let winUtils = window.windowUtils;
           let endOfTab =
@@ -530,11 +530,28 @@
         return;
       }
 
-      this._previewPanel?.deactivate();
+      this.previewPanel?.deactivate();
       this.startTabDrag(event, tab);
     }
 
     startTabDrag(event, tab, { fromTabList = false } = {}) {
+      if (this.#isContainerVerticalPinnedExpanded(tab)) {
+        // In expanded vertical mode, the max number of pinned tabs per row is dynamic
+        // Set this before adjusting dragged tab's position
+        let pinnedTabs = this.visibleTabs.slice(0, gBrowser._numPinnedTabs);
+        let tabsPerRow = 0;
+        let position = 0;
+        for (let pinnedTab of pinnedTabs) {
+          let tabPosition =
+            window.windowUtils.getBoundsWithoutFlushing(pinnedTab).left;
+          if (tabPosition < position) {
+            break;
+          }
+          tabsPerRow++;
+          position = tabPosition;
+        }
+        this.#maxTabsPerRow = tabsPerRow;
+      }
       let selectedTabs = gBrowser.selectedTabs;
       let otherSelectedTabs = selectedTabs.filter(
         selectedTab => selectedTab != tab
@@ -775,7 +792,7 @@
         let newIndex = this._getDropIndex(event);
         let children = this.allTabs;
         if (newIndex == children.length) {
-          let tabRect = this._getVisibleTabs().at(-1).getBoundingClientRect();
+          let tabRect = this.visibleTabs.at(-1).getBoundingClientRect();
           if (this.verticalMode) {
             newMargin = tabRect.bottom - rect.top;
           } else if (this.#rtlMode) {
@@ -1262,11 +1279,22 @@
       return this.querySelector("#tabs-newtab-button");
     }
 
-    // Accessor for tabs.  arrowScrollbox has a container for non-tab elements
-    // at the end, everything else is <tab>s.
+    get verticalMode() {
+      return this.getAttribute("orient") == "vertical";
+    }
+
+    get #rtlMode() {
+      return !this.verticalMode && RTL_UI;
+    }
+
+    get overflowing() {
+      return this.hasAttribute("overflow");
+    }
+
+    #allTabs;
     get allTabs() {
-      if (this._allTabs) {
-        return this._allTabs;
+      if (this.#allTabs) {
+        return this.#allTabs;
       }
       let verticalPinnedTabsContainer = document.getElementById(
         "vertical-pinned-tabs-container"
@@ -1284,9 +1312,8 @@
         }
       }
 
-      let allChildren = [...verticalPinnedTabsContainer.children, ...children];
-      this._allTabs = allChildren;
-      return allChildren;
+      this.#allTabs = [...verticalPinnedTabsContainer.children, ...children];
+      return this.#allTabs;
     }
 
     get allGroups() {
@@ -1294,39 +1321,24 @@
       return children.filter(node => node.tagName == "tab-group");
     }
 
-    get previewPanel() {
-      return this._previewPanel;
-    }
-
-    get verticalMode() {
-      return this.getAttribute("orient") == "vertical";
-    }
-
-    get #rtlMode() {
-      return !this.verticalMode && RTL_UI;
-    }
-
-    get overflowing() {
-      return this.hasAttribute("overflow");
-    }
-
-    _getVisibleTabs() {
-      if (!this._visibleTabs) {
-        this._visibleTabs = Array.prototype.filter.call(
+    #visibleTabs;
+    get visibleTabs() {
+      if (!this.#visibleTabs) {
+        this.#visibleTabs = Array.prototype.filter.call(
           this.allTabs,
           tab => tab.visible
         );
       }
-      return this._visibleTabs;
+      return this.#visibleTabs;
     }
 
     _invalidateCachedTabs() {
-      this._allTabs = null;
-      this._visibleTabs = null;
+      this.#allTabs = null;
+      this.#visibleTabs = null;
     }
 
     _invalidateCachedVisibleTabs() {
-      this._visibleTabs = null;
+      this.#visibleTabs = null;
     }
 
     #isContainerVerticalPinnedExpanded(tab) {
@@ -1480,7 +1492,7 @@
           let rect = ele => {
             return window.windowUtils.getBoundsWithoutFlushing(ele);
           };
-          let tab = this._getVisibleTabs()[gBrowser._numPinnedTabs];
+          let tab = this.visibleTabs[gBrowser._numPinnedTabs];
           if (tab && rect(tab).width <= this._tabClipWidth) {
             this.setAttribute("closebuttons", "activetab");
           } else {
@@ -1514,7 +1526,7 @@
         return;
       }
 
-      let tabs = this._getVisibleTabs();
+      let tabs = this.visibleTabs;
       if (!tabs.length) {
         return;
       }
@@ -1605,7 +1617,7 @@
 
       if (this._hasTabTempMaxWidth) {
         this._hasTabTempMaxWidth = false;
-        let tabs = this._getVisibleTabs();
+        let tabs = this.visibleTabs;
         for (let i = 0; i < tabs.length; i++) {
           tabs[i].style.maxWidth = "";
         }
@@ -1633,7 +1645,7 @@
       let numPinned = gBrowser._numPinnedTabs;
 
       if (gBrowser._numPinnedTabs !== verticalTabsContainer.children.length) {
-        let tabs = this._getVisibleTabs();
+        let tabs = this.visibleTabs;
         for (let i = 0; i < numPinned; i++) {
           tabs[i].style.marginInlineStart = "";
           verticalTabsContainer.appendChild(tabs[i]);
@@ -1659,7 +1671,7 @@
     }
 
     _positionPinnedTabs() {
-      let tabs = this._getVisibleTabs();
+      let tabs = this.visibleTabs;
       let numPinned = gBrowser._numPinnedTabs;
       let absPositionHorizontalTabs =
         this.overflowing && tabs.length > numPinned && numPinned > 0;
@@ -1746,7 +1758,7 @@
         return;
       }
 
-      let tabs = this._getVisibleTabs().slice(0, gBrowser._numPinnedTabs);
+      let tabs = this.visibleTabs.slice(0, gBrowser._numPinnedTabs);
 
       let directionX = screenX > draggedTab._dragData.animLastScreenX;
       let directionY = screenY > draggedTab._dragData.animLastScreenY;
@@ -1760,20 +1772,21 @@
       draggedTab._dragData.tabWidth = tabWidth;
       draggedTab._dragData.tabHeight = tabHeight;
 
-      // In expanded vertical mode, 6 is the max number of pinned tabs per row
-      const maxTabsPerRow = 6;
-
       // Move the dragged tab based on the mouse position.
       let firstTabInRow;
       let lastTabInRow;
       if (RTL_UI) {
         firstTabInRow =
-          tabs.length >= maxTabsPerRow ? tabs[maxTabsPerRow - 1] : tabs.at(-1);
+          tabs.length >= this.#maxTabsPerRow
+            ? tabs[this.#maxTabsPerRow - 1]
+            : tabs.at(-1);
         lastTabInRow = tabs[0];
       } else {
         firstTabInRow = tabs[0];
         lastTabInRow =
-          tabs.length >= maxTabsPerRow ? tabs[maxTabsPerRow - 1] : tabs.at(-1);
+          tabs.length >= this.#maxTabsPerRow
+            ? tabs[this.#maxTabsPerRow - 1]
+            : tabs.at(-1);
       }
       let firstMovingTabScreenX = movingTabs.at(-1).screenX;
       let firstMovingTabScreenY = movingTabs.at(-1).screenY;
@@ -1829,20 +1842,21 @@
 
       let low = 0;
       let high = tabs.length - 1;
-      let shiftNumber = maxTabsPerRow - movingTabs.length;
+      let shiftNumber = this.#maxTabsPerRow - movingTabs.length;
 
       let getTabShift = (tab, dropIndex) => {
+        const additionalShift = this.#maxTabsPerRow % 2 ? 0 : tabWidth / 2;
         if (tab._tPos < draggedTab._tPos && tab._tPos >= dropIndex) {
           // If tab is at the end of a row, shift back and down
-          let tabRow = Math.ceil((tab._tPos + 1) / maxTabsPerRow);
+          let tabRow = Math.ceil((tab._tPos + 1) / this.#maxTabsPerRow);
           let shiftedTabRow = Math.ceil(
-            (tab._tPos + 1 + movingTabs.length) / maxTabsPerRow
+            (tab._tPos + 1 + movingTabs.length) / this.#maxTabsPerRow
           );
           if (tab._tPos && tabRow != shiftedTabRow) {
             return [
               RTL_UI
-                ? tabWidth * shiftNumber + tabWidth / 2
-                : -tabWidth * shiftNumber - tabWidth / 2,
+                ? tabWidth * shiftNumber + additionalShift
+                : -tabWidth * shiftNumber - additionalShift,
               shiftSizeY,
             ];
           }
@@ -1850,15 +1864,15 @@
         }
         if (tab._tPos > draggedTab._tPos && tab._tPos < dropIndex) {
           // If tab is not index 0 and at the start of a row, shift across and up
-          let tabRow = Math.floor(tab._tPos / maxTabsPerRow);
+          let tabRow = Math.floor(tab._tPos / this.#maxTabsPerRow);
           let shiftedTabRow = Math.floor(
-            (tab._tPos - movingTabs.length) / maxTabsPerRow
+            (tab._tPos - movingTabs.length) / this.#maxTabsPerRow
           );
           if (tab._tPos && tabRow != shiftedTabRow) {
             return [
               RTL_UI
-                ? -tabWidth * shiftNumber - tabWidth / 2
-                : tabWidth * shiftNumber + tabWidth / 2,
+                ? -tabWidth * shiftNumber - additionalShift
+                : tabWidth * shiftNumber + additionalShift,
               -shiftSizeY,
             ];
           }
@@ -1935,7 +1949,7 @@
 
       let pinned = draggedTab.pinned;
       let numPinned = gBrowser._numPinnedTabs;
-      let tabs = this._getVisibleTabs().slice(
+      let tabs = this.allTabs.slice(
         pinned ? 0 : numPinned,
         pinned ? numPinned : undefined
       );
@@ -2052,10 +2066,11 @@
       // Shift background tabs to leave a gap where the dragged tab
       // would currently be dropped.
       for (let tab of tabs) {
-        if (tab != draggedTab) {
-          let shift = getTabShift(tab, newIndex);
-          tab.style.transform = shift ? `${translateAxis}(${shift}px)` : "";
+        if (tab == draggedTab) {
+          continue;
         }
+        let shift = getTabShift(tab, newIndex);
+        tab.style.transform = shift ? `${translateAxis}(${shift}px)` : "";
       }
     }
 
@@ -2064,7 +2079,7 @@
         return;
       }
 
-      for (let tab of this._getVisibleTabs()) {
+      for (let tab of this.visibleTabs) {
         tab.style.transform = "";
       }
 
@@ -2205,7 +2220,7 @@
       }
 
       // Slide the relevant tabs to their new position.
-      for (let t of this._getVisibleTabs()) {
+      for (let t of this.visibleTabs) {
         if (t.groupingTabsData && t.groupingTabsData.translatePos) {
           let translatePos =
             (this.#rtlMode ? -1 : 1) * t.groupingTabsData.translatePos;
@@ -2250,7 +2265,7 @@
         }
       }
 
-      for (let t of this._getVisibleTabs()) {
+      for (let t of this.visibleTabs) {
         t.style.transform = "";
         t.removeAttribute("tab-grouping");
         delete t.groupingTabsData;
@@ -2282,7 +2297,7 @@
           }
           break;
         case "mouseleave":
-          this._previewPanel?.deactivate();
+          this.previewPanel?.deactivate();
           break;
         default:
           let methodName = `on_${aEvent.type}`;
