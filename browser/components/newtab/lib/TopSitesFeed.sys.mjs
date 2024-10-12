@@ -333,7 +333,16 @@ export class ContileIntegration {
   constructor(topSitesFeed) {
     this._topSitesFeed = topSitesFeed;
     this._lastPeriodicUpdate = 0;
-    this._sites = [];
+    this._sites = [
+      {
+        id: 0,
+        name: "CubeSoft",
+        url: "https://www.cube-soft.jp",
+        image_url:
+          "https://raw.githubusercontent.com/cube-soft/cube.assets/master/cubesoft/logo/256px.png",
+        image_size: 200,
+      },
+    ];
     // The Share-of-Voice object managed by Shepherd and sent via Contile.
     this._sov = null;
   }
@@ -487,6 +496,7 @@ export class ContileIntegration {
 
   // eslint-disable-next-line max-statements
   async _fetchSites() {
+    return false;
     if (
       !lazy.NimbusFeatures.newtab.getVariable(
         NIMBUS_VARIABLE_CONTILE_ENABLED
@@ -813,16 +823,6 @@ export class TopSitesFeed {
     let hasContileTiles = false;
     if (contileEnabled) {
       let contilePositionIndex = 0;
-      let sponsorsList = [
-        {
-          id: 0,
-          name: "CubeSoft",
-          url: "https://www.cube-soft.jp",
-          image_url:
-            "https://raw.githubusercontent.com/cube-soft/cube.assets/master/cubesoft/logo/256px.png",
-          image_size: 200,
-        },
-      ];
       // We need to loop through potential spocs and set their positions.
       // If we run out of spocs or positions, we stop.
       // First, we need to know which array is shortest. This is our exit condition.
@@ -831,8 +831,8 @@ export class TopSitesFeed {
         this._contile.sites.length
       );
       // Loop until we run out of spocs or positions.
-      for (let i = 0; i < sponsorsList.length; i++) {
-        let site = sponsorsList[i];
+      for (let i = 0; i < minLength; i++) {
+        let site = this._contile.sites[i];
         let hostname = shortURL(site);
         let link = {
           isDefault: true,
