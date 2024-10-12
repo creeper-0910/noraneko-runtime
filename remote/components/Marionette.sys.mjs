@@ -140,7 +140,7 @@ class MarionetteParentProcess {
             Services.obs.addObserver(this, "domwindowopened");
           }
 
-          lazy.RecommendedPreferences.applyPreferences();
+          //lazy.RecommendedPreferences.applyPreferences();
 
           // Only set preferences to preserve in a new profile
           // when Marionette is enabled.
