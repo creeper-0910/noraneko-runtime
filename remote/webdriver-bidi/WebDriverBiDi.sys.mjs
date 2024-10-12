@@ -209,7 +209,7 @@ export class WebDriverBiDi {
 
     this.#running = true;
 
-    lazy.RecommendedPreferences.applyPreferences(RECOMMENDED_PREFS);
+    //lazy.RecommendedPreferences.applyPreferences(RECOMMENDED_PREFS);
 
     // Install a HTTP handler for direct WebDriver BiDi connection requests.
     this.#agent.server.registerPathHandler(
