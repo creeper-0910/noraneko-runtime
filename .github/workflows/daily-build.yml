@@ -17,15 +17,10 @@ on:
         default: true
 
 run-name: "(B) 📅 Daily Runtime Build with Pull Upstream"
-jobs:
-  part-1:
-    name: Pull Upstream from Mozilla-Central
-    uses: ./.github/workflows/misc-pull-upstream.yml
-    secrets: inherit
-
+# pull-upstream don't affect continuous workflow but in next running
+jobs:
   windows-x86_64:
-    name: Windows x86_64 build
-    needs: part-1
+    name: Windows x86_64 build
     uses: ./.github/workflows/wrapper-build-windows.yml
     secrets: inherit
     with:
@@ -33,8 +28,7 @@ jobs:
       pgo: ${{ toJSON(inputs.pgo) == 'true' }}
 
   linux-x86_64:
-    name: Linux x86_64 build
-    needs: part-1
+    name: Linux x86_64 build
     uses: ./.github/workflows/wrapper-build-linux.yml
     secrets: inherit
     with:
@@ -42,8 +36,7 @@ jobs:
       pgo: ${{ toJSON(inputs.pgo) == 'true' }}
 
   linux-aarch64:
-    name: Linux aarch64 build
-    needs: part-1
+    name: Linux aarch64 build
     uses: ./.github/workflows/common-build.yml
     secrets: inherit
     with:
